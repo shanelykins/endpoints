@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: openai-endpoint-tester
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 18.0.0
+    healthCheckPath: /
