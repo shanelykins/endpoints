@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Copy, CheckCircle } from 'lucide-react';
 import type { Endpoint } from '../types/endpoint';
 
 interface EndpointModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: Omit<Endpoint, 'id' | 'createdAt' | 'status'>, status: Endpoint['status']) => void;
+  onSave: (data: Omit<Endpoint, 'id' | 'createdAt' | 'status'>, status: Endpoint['status'], proxyUrl?: string) => void;
   endpoint?: Endpoint;
 }
 
@@ -24,6 +24,8 @@ export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: End
   const [isLoading, setIsLoading] = useState(false);
   const [testStatus, setTestStatus] = useState<Endpoint['status']>('not_tested');
   const [error, setError] = useState<string | null>(null);
+  const [proxyUrl, setProxyUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (endpoint) {
@@ -36,6 +38,7 @@ export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: End
         apiKey: '',
       });
       setTestStatus(endpoint.status);
+      setProxyUrl(endpoint.proxyUrl || null);
     } else {
       setFormData({
         name: '',
@@ -46,11 +49,21 @@ export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: End
         apiKey: '',
       });
       setTestStatus('not_tested');
+      setProxyUrl(null);
     }
     setTestInput('');
     setTestResult(null);
     setError(null);
+    setCopied(false);
   }, [endpoint, isOpen]);
+
+  const copyProxyUrl = async () => {
+    if (proxyUrl) {
+      await navigator.clipboard.writeText(proxyUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   const testEndpoint = async () => {
     if (!formData.apiKey || !testInput) return;
@@ -58,10 +71,9 @@ export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: End
     setIsLoading(true);
     setTestResult(null);
     setError(null);
+    setProxyUrl(null);
     
     try {
-      console.log('Testing endpoint with input:', testInput);
-      
       const response = await fetch('/api/test-endpoint', {
         method: 'POST',
         headers: { 
@@ -73,9 +85,7 @@ export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: End
         })
       });
 
-      console.log('Response status:', response.status);
       const data = await response.json();
-      console.log('Response data:', data);
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to test endpoint');
@@ -83,6 +93,7 @@ export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: End
 
       setTestResult(data);
       setTestStatus('operational');
+      setProxyUrl(data.proxy_url);
     } catch (error) {
       console.error('Error testing endpoint:', error);
       setError(error instanceof Error ? error.message : 'An error occurred');
@@ -95,7 +106,7 @@ export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: End
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const { apiKey, ...rest } = formData;
-    onSave(rest, testStatus);
+    onSave(rest, testStatus, proxyUrl || undefined);
   };
 
   if (!isOpen) return null;
@@ -182,9 +193,35 @@ export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: End
               </div>
             )}
 
-            {testResult && (
+            {proxyUrl && (
               <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                <pre className="whitespace-pre-wrap text-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-semibold">Proxy URL:</h4>
+                  <button
+                    onClick={copyProxyUrl}
+                    className="text-gray-500 hover:text-gray-700"
+                    type="button"
+                  >
+                    {copied ? (
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                    ) : (
+                      <Copy className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+                <code className="block w-full p-2 bg-gray-100 rounded text-sm break-all">
+                  {proxyUrl}
+                </code>
+                <p className="text-sm text-gray-500 mt-2">
+                  Use this URL to make requests with the same configuration
+                </p>
+              </div>
+            )}
+
+            {testResult && (
+              <div className="mt-4">
+                <h4 className="font-semibold mb-2">Response:</h4>
+                <pre className="bg-gray-50 p-4 rounded-lg overflow-auto max-h-[200px] text-sm">
                   {JSON.stringify(testResult, null, 2)}
                 </pre>
               </div>

@@ -10,6 +10,7 @@ export interface Endpoint {
   createdAt: string;
   status: 'operational' | 'error' | 'not_tested';
   lastTested?: string;
+  proxyUrl?: string;
 }
 
 export interface CreateEndpointPayload {

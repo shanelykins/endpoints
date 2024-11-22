@@ -18,7 +18,7 @@ export default function App() {
     setEndpoints(prev => prev.filter(endpoint => endpoint.id !== id));
   };
 
-  const handleSave = (data: Omit<Endpoint, 'id' | 'createdAt' | 'status'>, status: Endpoint['status']) => {
+  const handleSave = (data: Omit<Endpoint, 'id' | 'createdAt' | 'status'>, status: Endpoint['status'], proxyUrl?: string) => {
     if (editingEndpoint) {
       setEndpoints(prev => prev.map(ep => 
         ep.id === editingEndpoint.id 
@@ -26,7 +26,8 @@ export default function App() {
               ...ep, 
               ...data,
               status,
-              lastTested: new Date().toISOString()
+              lastTested: new Date().toISOString(),
+              proxyUrl: proxyUrl || ep.proxyUrl
             }
           : ep
       ));
@@ -36,7 +37,8 @@ export default function App() {
         id: crypto.randomUUID(),
         createdAt: new Date().toISOString(),
         status,
-        lastTested: new Date().toISOString()
+        lastTested: new Date().toISOString(),
+        proxyUrl
       }]);
     }
     setIsModalOpen(false);
