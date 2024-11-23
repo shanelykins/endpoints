@@ -1,57 +1,34 @@
--- Create the endpoints table
-create table if not exists public.endpoints (
-  id text primary key,
-  api_type text not null,
-  name text not null,
-  target_url text not null,
-  allowed_origins text[] not null default array['*'],
-  description text,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
-  status text not null default 'not_tested',
-  last_tested timestamp with time zone,
-  proxy_url text
-);
+-- Drop existing table if it exists
+drop table if exists public.endpoints;
 
--- Enable Row Level Security (RLS)
-alter table public.endpoints enable row level security;
-
--- Create policy to allow all operations for now (you can restrict this later)
-create policy "Allow public access"
-  on public.endpoints
-  for all
-  using (true)
-  with check (true);
-
--- Create the function to initialize the table
-create or replace function create_endpoints_table()
-returns void
-language plpgsql
-security definer
-as $$
-begin
-  -- Create the table if it doesn't exist
-  create table if not exists public.endpoints (
+-- Create the endpoints table with correct column names and types
+create table public.endpoints (
     id text primary key,
     api_type text not null,
     name text not null,
     target_url text not null,
     allowed_origins text[] not null default array['*'],
     description text,
-    created_at timestamp with time zone default timezone('utc'::text, now()) not null,
-    status text not null default 'not_tested',
-    last_tested timestamp with time zone,
+    created_at timestamptz default now() not null,
+    status text not null default 'not_tested'::text,
+    last_tested timestamptz,
     proxy_url text
-  );
+);
 
-  -- Enable RLS
-  alter table public.endpoints enable row level security;
+-- Enable Row Level Security (RLS)
+alter table public.endpoints enable row level security;
 
-  -- Create policy
-  drop policy if exists "Allow public access" on public.endpoints;
-  create policy "Allow public access"
+-- Create policy to allow all operations
+create policy "Enable all operations for endpoints"
     on public.endpoints
     for all
     using (true)
     with check (true);
-end;
-$$;
+
+-- Grant access to authenticated and anon users
+grant all on public.endpoints to authenticated, anon;
+
+-- Create indexes for better performance
+create index if not exists endpoints_created_at_idx on public.endpoints (created_at desc);
+create index if not exists endpoints_api_type_idx on public.endpoints (api_type);
+create index if not exists endpoints_status_idx on public.endpoints (status);
