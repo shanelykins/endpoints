@@ -3,8 +3,13 @@ services:
     name: openai-endpoint-tester
     env: node
     buildCommand: npm install && npm run build
-    startCommand: npm start
+    startCommand: node server.js
     envVars:
       - key: NODE_VERSION
         value: 18.0.0
-    healthCheckPath: /
+      - key: RENDER_EXTERNAL_URL
+        sync: false
+    disk:
+      name: persist-storage
+      mountPath: /data
+      sizeGB: 1

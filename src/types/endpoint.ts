@@ -1,4 +1,11 @@
-export type ApiType = 'openai' | 'anthropic' | 'custom';
+export type ApiType = 
+  | 'openai' 
+  | 'anthropic' 
+  | 'cohere' 
+  | 'google-ai' 
+  | 'azure-openai' 
+  | 'huggingface' 
+  | 'custom';
 
 export interface Endpoint {
   id: string;

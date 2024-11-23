@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Copy, CheckCircle } from 'lucide-react';
-import type { Endpoint } from '../types/endpoint';
+import type { Endpoint, ApiType } from '../types/endpoint';
 
 interface EndpointModalProps {
   isOpen: boolean;
@@ -9,11 +9,21 @@ interface EndpointModalProps {
   endpoint?: Endpoint;
 }
 
+const API_TYPES: { value: ApiType; label: string; url: string }[] = [
+  { value: 'openai', label: 'OpenAI', url: 'https://api.openai.com/v1/chat/completions' },
+  { value: 'anthropic', label: 'Anthropic', url: 'https://api.anthropic.com/v1/complete' },
+  { value: 'cohere', label: 'Cohere', url: 'https://api.cohere.ai/v1/generate' },
+  { value: 'google-ai', label: 'Google AI', url: 'https://generativelanguage.googleapis.com/v1/models' },
+  { value: 'azure-openai', label: 'Azure OpenAI', url: 'https://YOUR_RESOURCE_NAME.openai.azure.com/openai/deployments/YOUR_DEPLOYMENT_NAME' },
+  { value: 'huggingface', label: 'Hugging Face', url: 'https://api-inference.huggingface.co/models' },
+  { value: 'custom', label: 'Custom API', url: '' }
+];
+
 export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: EndpointModalProps) {
   const [formData, setFormData] = useState({
+    apiType: 'openai' as ApiType,
     name: '',
-    apiType: 'openai' as const,
-    targetUrl: 'https://api.openai.com/v1/chat/completions',
+    targetUrl: API_TYPES[0].url,
     allowedOrigins: ['*'],
     description: '',
     apiKey: '',
@@ -41,9 +51,9 @@ export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: End
       setProxyUrl(endpoint.proxyUrl || null);
     } else {
       setFormData({
-        name: '',
         apiType: 'openai',
-        targetUrl: 'https://api.openai.com/v1/chat/completions',
+        name: '',
+        targetUrl: API_TYPES[0].url,
         allowedOrigins: ['*'],
         description: '',
         apiKey: '',
@@ -56,6 +66,15 @@ export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: End
     setError(null);
     setCopied(false);
   }, [endpoint, isOpen]);
+
+  const handleApiTypeChange = (type: ApiType) => {
+    const selectedApi = API_TYPES.find(api => api.value === type);
+    setFormData(prev => ({
+      ...prev,
+      apiType: type,
+      targetUrl: selectedApi?.url || ''
+    }));
+  };
 
   const copyProxyUrl = async () => {
     if (proxyUrl) {
@@ -125,39 +144,54 @@ export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: End
         </div>
         
         <form onSubmit={handleSubmit} className="p-6 pt-2 space-y-4">
-          <input
-            type="text"
-            value={formData.name}
-            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-            className="w-full px-4 py-2 border rounded-lg"
-            placeholder="Endpoint Name"
-            required
-          />
+          <div className="space-y-4">
+            <select
+              value={formData.apiType}
+              onChange={(e) => handleApiTypeChange(e.target.value as ApiType)}
+              className="w-full px-4 py-2 border rounded-lg bg-white"
+            >
+              {API_TYPES.map(api => (
+                <option key={api.value} value={api.value}>
+                  {api.label}
+                </option>
+              ))}
+            </select>
 
-          <select
-            value={formData.apiType}
-            onChange={(e) => setFormData(prev => ({ ...prev, apiType: e.target.value as 'openai' }))}
-            className="w-full px-4 py-2 border rounded-lg"
-          >
-            <option value="openai">OpenAI</option>
-          </select>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              className="w-full px-4 py-2 border rounded-lg"
+              placeholder="Endpoint Name"
+              required
+            />
 
-          <input
-            type="password"
-            value={formData.apiKey}
-            onChange={(e) => setFormData(prev => ({ ...prev, apiKey: e.target.value }))}
-            className="w-full px-4 py-2 border rounded-lg"
-            placeholder="API Key"
-            required={!endpoint}
-          />
+            <input
+              type="password"
+              value={formData.apiKey}
+              onChange={(e) => setFormData(prev => ({ ...prev, apiKey: e.target.value }))}
+              className="w-full px-4 py-2 border rounded-lg"
+              placeholder="API Key"
+              required={!endpoint}
+            />
 
-          <textarea
-            value={formData.description}
-            onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-            className="w-full px-4 py-2 border rounded-lg resize-none"
-            placeholder="Endpoint Description"
-            rows={3}
-          />
+            <input
+              type="url"
+              value={formData.targetUrl}
+              onChange={(e) => setFormData(prev => ({ ...prev, targetUrl: e.target.value }))}
+              className="w-full px-4 py-2 border rounded-lg"
+              placeholder="Target URL"
+              required
+            />
+
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              className="w-full px-4 py-2 border rounded-lg resize-none"
+              placeholder="Endpoint Description"
+              rows={3}
+            />
+          </div>
 
           <div className="border-t pt-4">
             <div className="flex items-center justify-between mb-4">
@@ -182,7 +216,7 @@ export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: End
               type="button"
               onClick={testEndpoint}
               disabled={isLoading || !formData.apiKey || !testInput}
-              className="w-full px-4 py-2 bg-black text-white rounded-lg disabled:opacity-50"
+              className="w-full px-4 py-2 bg-gray-900 text-white rounded-lg disabled:opacity-50 hover:bg-gray-800"
             >
               {isLoading ? 'Testing...' : 'Test Endpoint'}
             </button>
@@ -231,7 +265,7 @@ export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: End
           <div className="pt-4 border-t">
             <button
               type="submit"
-              className="w-full px-4 py-2 bg-black text-white rounded-lg"
+              className="w-full px-4 py-2 bg-black text-white rounded-lg hover:bg-black/90"
             >
               Save
             </button>
