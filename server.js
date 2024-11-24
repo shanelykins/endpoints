@@ -137,7 +137,8 @@ app.post('/api/test-endpoint', async (req, res) => {
   }
 });
 
-app.post('/api/proxy/:proxyId', async (req, res) => {
+// Handle both GET (documentation) and POST (proxy) requests
+app.all('/api/proxy/:proxyId', async (req, res) => {
   try {
     const baseUrl = process.env.RENDER_EXTERNAL_URL || 'http://localhost:3001';
     const { data: endpoint, error } = await supabase
@@ -150,29 +151,193 @@ app.post('/api/proxy/:proxyId', async (req, res) => {
       return res.status(404).json({ error: 'Endpoint not found' });
     }
 
-    const apiKey = req.headers['x-api-key'];
-    if (!apiKey || typeof apiKey !== 'string') {
-      return res.status(400).json({ error: 'API key is required in x-api-key header' });
+    // Return documentation for GET requests
+    if (req.method === 'GET') {
+      // If browser is requesting HTML
+      if (req.headers.accept?.includes('text/html')) {
+        const html = `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>API Endpoint Documentation - ${endpoint.name}</title>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <style>
+                body { 
+                  font-family: system-ui, -apple-system, sans-serif;
+                  line-height: 1.5;
+                  max-width: 800px;
+                  margin: 40px auto;
+                  padding: 0 20px;
+                  color: #333;
+                }
+                pre {
+                  background: #f6f8fa;
+                  padding: 16px;
+                  border-radius: 6px;
+                  overflow-x: auto;
+                }
+                .endpoint {
+                  color: #0969da;
+                  font-family: monospace;
+                }
+                .header {
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  margin-bottom: 2rem;
+                }
+                .status {
+                  padding: 4px 8px;
+                  border-radius: 4px;
+                  font-size: 14px;
+                }
+                .status.operational {
+                  background: #dcfce7;
+                  color: #166534;
+                }
+                .status.error {
+                  background: #fee2e2;
+                  color: #991b1b;
+                }
+                .status.not-tested {
+                  background: #f3f4f6;
+                  color: #374151;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <h1>${endpoint.name}</h1>
+                <span class="status ${endpoint.status}">
+                  ${endpoint.status.replace('_', ' ').toUpperCase()}
+                </span>
+              </div>
+              
+              <p>${endpoint.description || 'No description provided.'}</p>
+              
+              <h2>Endpoint URL</h2>
+              <p class="endpoint">${endpoint.proxy_url}</p>
+              
+              <h2>Method</h2>
+              <p>POST</p>
+              
+              <h2>Headers</h2>
+              <pre>Content-Type: application/json
+x-api-key: YOUR_API_KEY</pre>
+              
+              <h2>Request Format</h2>
+              <pre>{
+  "prompt": "Your text to be processed"
+}</pre>
+              
+              <h2>Response Format</h2>
+              <pre>{
+  "id": "chatcmpl-...",
+  "choices": [{
+    "message": {
+      "content": "Processed response"
+    }
+  }]
+}</pre>
+              
+              <h2>Example Usage</h2>
+              <p>Using curl:</p>
+              <pre>curl -X POST ${endpoint.proxy_url} \\
+     -H "Content-Type: application/json" \\
+     -H "x-api-key: YOUR_API_KEY" \\
+     -d '{"prompt": "Text to process"}'</pre>
+              
+              <h2>Rate Limits</h2>
+              <p>This endpoint uses the underlying API's rate limits.</p>
+              
+              <footer style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; color: #666;">
+                <p>Last tested: ${endpoint.last_tested ? new Date(endpoint.last_tested).toLocaleString() : 'Never'}</p>
+                <p>Created: ${new Date(endpoint.created_at).toLocaleString()}</p>
+              </footer>
+            </body>
+          </html>
+        `;
+        res.setHeader('Content-Type', 'text/html');
+        return res.send(html);
+      }
+      
+      // Return JSON documentation
+      return res.json({
+        name: endpoint.name,
+        description: endpoint.description,
+        endpoint: endpoint.proxy_url,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': 'YOUR_API_KEY'
+        },
+        requestFormat: {
+          prompt: 'string (required)'
+        },
+        responseFormat: {
+          id: 'string',
+          choices: [{
+            message: {
+              content: 'string (processed response)'
+            }
+          }]
+        },
+        example: {
+          request: {
+            prompt: 'Text to process'
+          }
+        }
+      });
     }
 
-    const openai = new OpenAI({ apiKey });
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a helpful assistant that summarizes text.'
-        },
-        {
-          role: 'user',
-          content: req.body.prompt
-        }
-      ]
-    });
+    // Handle POST requests (actual proxy functionality)
+    if (req.method === 'POST') {
+      const apiKey = req.headers['x-api-key'];
+      if (!apiKey || typeof apiKey !== 'string') {
+        return res.status(400).json({ error: 'API key is required in x-api-key header' });
+      }
 
-    res.json(completion);
+      const openai = new OpenAI({ apiKey });
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful assistant that summarizes text.'
+          },
+          {
+            role: 'user',
+            content: req.body.prompt
+          }
+        ]
+      });
+
+      // Update last tested timestamp and status
+      await supabase
+        .from('endpoints')
+        .update({ 
+          last_tested: new Date().toISOString(),
+          status: 'operational'
+        })
+        .eq('proxy_url', endpoint.proxy_url);
+
+      res.json(completion);
+    }
   } catch (error) {
     console.error('Proxy request error:', error);
+    
+    // Update status to error if request fails
+    if (req.method === 'POST') {
+      await supabase
+        .from('endpoints')
+        .update({ 
+          last_tested: new Date().toISOString(),
+          status: 'error'
+        })
+        .eq('proxy_url', `${process.env.RENDER_EXTERNAL_URL || 'http://localhost:3001'}/api/proxy/${req.params.proxyId}`);
+    }
+
     res.status(500).json({ 
       error: error instanceof Error ? error.message : 'Failed to process request' 
     });
