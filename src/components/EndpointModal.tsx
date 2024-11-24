@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Copy, CheckCircle } from 'lucide-react';
 import type { Endpoint, ApiType } from '../types/endpoint';
+import toast from 'react-hot-toast';
 
 interface EndpointModalProps {
   isOpen: boolean;
@@ -21,8 +22,8 @@ const API_TYPES: { value: ApiType; label: string; url: string }[] = [
 
 export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: EndpointModalProps) {
   const [formData, setFormData] = useState({
-    apiType: 'openai' as ApiType,
     name: '',
+    apiType: 'openai' as ApiType,
     targetUrl: API_TYPES[0].url,
     allowedOrigins: ['*'],
     description: '',
@@ -44,15 +45,15 @@ export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: End
         apiType: endpoint.apiType,
         targetUrl: endpoint.targetUrl,
         allowedOrigins: endpoint.allowedOrigins,
-        description: endpoint.description,
+        description: endpoint.description || '',
         apiKey: '',
       });
       setTestStatus(endpoint.status);
       setProxyUrl(endpoint.proxyUrl || null);
     } else {
       setFormData({
-        apiType: 'openai',
         name: '',
+        apiType: 'openai',
         targetUrl: API_TYPES[0].url,
         allowedOrigins: ['*'],
         description: '',
@@ -85,19 +86,19 @@ export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: End
   };
 
   const testEndpoint = async () => {
-    if (!formData.apiKey || !testInput) return;
+    if (!formData.apiKey || !testInput) {
+      toast.error('API key and test input are required');
+      return;
+    }
     
     setIsLoading(true);
     setTestResult(null);
     setError(null);
-    setProxyUrl(null);
     
     try {
       const response = await fetch('/api/test-endpoint', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           apiKey: formData.apiKey,
           prompt: testInput
@@ -112,20 +113,29 @@ export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: End
 
       setTestResult(data);
       setTestStatus('operational');
-      setProxyUrl(data.proxy_url);
+      toast.success('Endpoint test successful');
     } catch (error) {
       console.error('Error testing endpoint:', error);
       setError(error instanceof Error ? error.message : 'An error occurred');
       setTestStatus('error');
+      toast.error('Failed to test endpoint');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { apiKey, ...rest } = formData;
-    onSave(rest, testStatus, proxyUrl || undefined);
+    
+    try {
+      const { apiKey, ...rest } = formData;
+      await onSave(rest, testStatus, proxyUrl || undefined);
+      toast.success('Endpoint saved successfully');
+      onClose();
+    } catch (error) {
+      console.error('Error saving endpoint:', error);
+      toast.error('Failed to save endpoint');
+    }
   };
 
   if (!isOpen) return null;
@@ -224,31 +234,6 @@ export default function EndpointModal({ isOpen, onClose, onSave, endpoint }: End
             {error && (
               <div className="mt-4 p-4 bg-red-50 text-red-600 rounded-lg">
                 {error}
-              </div>
-            )}
-
-            {proxyUrl && (
-              <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-semibold">Proxy URL:</h4>
-                  <button
-                    onClick={copyProxyUrl}
-                    className="text-gray-500 hover:text-gray-700"
-                    type="button"
-                  >
-                    {copied ? (
-                      <CheckCircle className="w-5 h-5 text-green-500" />
-                    ) : (
-                      <Copy className="w-5 h-5" />
-                    )}
-                  </button>
-                </div>
-                <code className="block w-full p-2 bg-gray-100 rounded text-sm break-all">
-                  {proxyUrl}
-                </code>
-                <p className="text-sm text-gray-500 mt-2">
-                  Use this URL to make requests with the same configuration
-                </p>
               </div>
             )}
 
